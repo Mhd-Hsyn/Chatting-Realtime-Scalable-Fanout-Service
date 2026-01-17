@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI
+
+    env_file: ./publisher/.env
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  websocket1:
+    build:
+      context: ./web-sockets-1
+      dockerfile: Dockerfile
+    container_name: websocket1
+    env_file: ./web-sockets-1/.env
+    depends_on:
+      - rabbitmq
+    ports:
+      - "5007:5007"
+
+  websocket2:
+    build:
+      context: ./web-sockets-2
+      dockerfile: Dockerfile
+    container_name: websocket2
+    env_file: ./web-sockets-2/.env
+    depends_on:
+      - rabbitmq
+    ports:
+      - "5009:5009"
+
+  publisher:
+    build:
+      context: ./publisher
+      dockerfile: Dockerfile
+    container_name: publisher
+    env_file: ./publisher/.env
+    depends_on:
+      - rabbitmq
+    ports:
+      - "5008:5008"
+
+volumes:
+  rabbitmq_data:
