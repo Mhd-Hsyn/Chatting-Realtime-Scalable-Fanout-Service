@@ -27,12 +27,12 @@ sio_app = socketio.ASGIApp(
 )
 
 
-@sio_server.event
-async def connect(sid, environ, auth):
-    logger.info("connect is running")
+# @sio_server.event
+# async def connect(sid, environ, auth):
+#     logger.info("connect is running")
 
-    print(f'{sid}: connected')
-    await sio_server.emit('connection_success', {'sid': sid})
+#     print(f'{sid}: connected')
+#     await sio_server.emit('connection_success', {'sid': sid})
 
 
 
@@ -40,101 +40,70 @@ async def connect(sid, environ, auth):
 ##################### JWT websockets #####################
 
 
-# @sio_server.event
-# async def connect(sid, environ, auth):
-#     """
-#     Robust Connect Handler
-#     Supports both Standard Auth (Frontend) and Headers (Postman)
-#     """
-#     print(f"\n--- New Connection Request: {sid} ---")
+@sio_server.event
+async def connect(sid, environ, auth):
+    """
+    Robust Connect Handler
+    Supports both Standard Auth (Frontend) and Headers (Postman)
+    """
+    print(f"\n--- New Connection Request: {sid} ---")
     
-#     # Debugging: Dekho k Headers me kia aa raha h
-#     # print(f"Headers (Environ): {environ}") 
+    # Debugging: Dekho k Headers me kia aa raha h
+    # print(f"Headers (Environ): {environ}") 
 
-#     token = None
+    token = None
 
-#     # -----------------------------------------------------
-#     # Priority 1: Check Standard Auth (React/Frontend Style)
-#     # -----------------------------------------------------
-#     if auth:
-#         token = auth.get('token')
+    # -----------------------------------------------------
+    # Priority 1: Check Standard Auth (React/Frontend Style)
+    # -----------------------------------------------------
+    if auth:
+        token = auth.get('token')
     
-#     # -----------------------------------------------------
-#     # Priority 2: Check Headers (Postman/Test Tool Style)
-#     # -----------------------------------------------------
-#     if not token:
-#         # Python 'environ' me headers usually 'HTTP_' prefix aur UPPERCASE k sath hotay hain
-#         # Agar tumne Postman me 'token' bheja h, to yahan 'HTTP_TOKEN' milega
-#         token = environ.get('HTTP_TOKEN')
+    # -----------------------------------------------------
+    # Priority 2: Check Headers (Postman/Test Tool Style)
+    # -----------------------------------------------------
+    if not token:
+        # Python 'environ' me headers usually 'HTTP_' prefix aur UPPERCASE k sath hotay hain
+        # Agar tumne Postman me 'token' bheja h, to yahan 'HTTP_TOKEN' milega
+        token = environ.get('HTTP_TOKEN')
         
-#         # Agar tumne 'Authorization' header use kia h
-#         if not token:
-#             auth_header = environ.get('HTTP_AUTHORIZATION')
-#             if auth_header:
-#                 # 'Bearer xyz...' me se sirf token nikalo
-#                 token = auth_header.split(' ')[1] if ' ' in auth_header else auth_header
+        # Agar tumne 'Authorization' header use kia h
+        if not token:
+            auth_header = environ.get('HTTP_AUTHORIZATION')
+            if auth_header:
+                # 'Bearer xyz...' me se sirf token nikalo
+                token = auth_header.split(' ')[1] if ' ' in auth_header else auth_header
 
-#     # -----------------------------------------------------
-#     # Verification Logic
-#     # -----------------------------------------------------
-#     if not token:
-#         print("❌ Rejecting: No Token Found")
-#         raise ConnectionRefusedError('Authentication failed: Token missing')
+    # -----------------------------------------------------
+    # Verification Logic
+    # -----------------------------------------------------
+    if not token:
+        print("❌ Rejecting: No Token Found")
+        raise ConnectionRefusedError('Authentication failed: Token missing')
 
-#     # Verify Token (Apni JWT logic yahan call kro)
-#     user_payload = verify_jwt_token(token) # <--- Tumhara verify function
+    # Verify Token (Apni JWT logic yahan call kro)
+    user_payload = verify_jwt_token(token) # <--- Tumhara verify function
     
-#     if not user_payload:
-#         print("❌ Rejecting: Invalid Token")
-#         raise ConnectionRefusedError('Authentication failed: Invalid Token')
+    if not user_payload:
+        print("❌ Rejecting: Invalid Token")
+        raise ConnectionRefusedError('Authentication failed: Invalid Token')
 
-#     # Success Flow
-#     user_id = user_payload.get('id') or user_payload.get('email')
+    # Success Flow
+    user_id = user_payload.get('id') or user_payload.get('email')
 
-#     print("user_id ______________ ", user_id)
+    print("user_id ______________ ", user_id)
     
-#     await sio_server.save_session(sid, {
-#         'user_id': user_id,
-#         'user_data': user_payload
-#     })
+    await sio_server.save_session(sid, {
+        'user_id': user_id,
+        'user_data': user_payload
+    })
     
-#     # Auto-join Personal Room
-#     user_room = f"user_{user_id}"
-#     sio_server.enter_room(sid, user_room)
+    # Auto-join Personal Room
+    user_room = f"user_{user_id}"
+    sio_server.enter_room(sid, user_room)
     
-#     print(f"✅ User {user_id} Connected via {'Auth Dict' if auth else 'Headers'}")
-#     await sio_server.emit('connection_success', {'sid': sid})
-
-
-
-# @sio_server.event
-# async def join_channel(sid, data):
-#     logger.info("join_channel is running")
-
-    
-#     if not isinstance(data, dict):
-#         print(f"Invalid data format received: {data}")
-#         return
-
-#     # Log the received data for debugging
-#     print(f"Received join_channel data: {data}")
-
-#     channel_name = data.get('channel_name')
-#     user_data = data.get('user_data')
-
-#     if not channel_name or not user_data:
-#         print(f"Missing channel_name or user_data in: {data}")
-#         return
-
-#     session_data = {'channel_name': channel_name, 'user_data': user_data}
-#     await sio_server.save_session(sid, session_data)
-
-#     if channel_name:
-#         sio_server.enter_room(sid, channel_name)
-#         await sio_server.emit('user_joined', {'user_data': user_data}, room=channel_name, skip_sid=sid)
-#         print(f"\n\n JOIN SUCCESSFULLY ------- {user_data} \n\n")
-#     else:
-#         print(f"Error: Channel name is None. Cannot join room.")
+    print(f"✅ User {user_id} Connected via {'Auth Dict' if auth else 'Headers'}")
+    await sio_server.emit('connection_success', {'sid': sid})
 
 
 
