@@ -35,35 +35,6 @@ async def connect(sid, environ, auth):
     await sio_server.emit('connection_success', {'sid': sid})
 
 
-@sio_server.event
-async def join_channel(sid, data):
-    logger.info("join_channel is running")
-
-    
-    if not isinstance(data, dict):
-        print(f"Invalid data format received: {data}")
-        return
-
-    # Log the received data for debugging
-    print(f"Received join_channel data: {data}")
-
-    channel_name = data.get('channel_name')
-    user_data = data.get('user_data')
-
-    if not channel_name or not user_data:
-        print(f"Missing channel_name or user_data in: {data}")
-        return
-
-    session_data = {'channel_name': channel_name, 'user_data': user_data}
-    await sio_server.save_session(sid, session_data)
-
-    if channel_name:
-        sio_server.enter_room(sid, channel_name)
-        await sio_server.emit('user_joined', {'user_data': user_data}, room=channel_name, skip_sid=sid)
-        print(f"\n\n JOIN SUCCESSFULLY ------- {user_data} \n\n")
-    else:
-        print(f"Error: Channel name is None. Cannot join room.")
-
 
 
 ##################### JWT websockets #####################
@@ -136,39 +107,66 @@ async def join_channel(sid, data):
 
 
 
-
 # @sio_server.event
 # async def join_channel(sid, data):
-#     # 1. Session data uthao
-#     session = await sio_server.get_session(sid)
-#     user_id = session.get('user_id')
-#     old_room = session.get('active_room')
-#     print("old_room __________ ", old_room)
-    
-#     new_room = data.get('channel_name') # e.g., 'chat_55'
-#     print("new_room __________ ", new_room)
+#     logger.info("join_channel is running")
 
-#     if not new_room:
+    
+#     if not isinstance(data, dict):
+#         print(f"Invalid data format received: {data}")
 #         return
 
-#     # 2. PURANA ROOM CHORO (Cleanup)
-#     # Agar user pehlay 'chat_44' me tha, usay wahan se nikalo
-#     if old_room and (old_room != new_room):
-#         sio_server.leave_room(sid, old_room)
-#         logger.info(f"User {user_id} left {old_room}")
+#     # Log the received data for debugging
+#     print(f"Received join_channel data: {data}")
 
-#     # 3. NAYA ROOM JOIN KRO
-#     sio_server.enter_room(sid, new_room)
+#     channel_name = data.get('channel_name')
+#     user_data = data.get('user_data')
+
+#     if not channel_name or not user_data:
+#         print(f"Missing channel_name or user_data in: {data}")
+#         return
+
+#     session_data = {'channel_name': channel_name, 'user_data': user_data}
+#     await sio_server.save_session(sid, session_data)
+
+#     if channel_name:
+#         sio_server.enter_room(sid, channel_name)
+#         await sio_server.emit('user_joined', {'user_data': user_data}, room=channel_name, skip_sid=sid)
+#         print(f"\n\n JOIN SUCCESSFULLY ------- {user_data} \n\n")
+#     else:
+#         print(f"Error: Channel name is None. Cannot join room.")
+
+
+
+
+@sio_server.event
+async def join_channel(sid, data):
+    # 1. Session uthao (Jo Connect k waqt bana tha)
+    session = await sio_server.get_session(sid)
+    user_id = session.get('user_id') 
     
-#     # 4. Session Update kro
-#     # Note: Hum poora session overwrite nhi kr rahay, sirf update kr rahay hain
-#     await sio_server.save_session(sid, {**session, 'active_room': new_room})
-
-#     logger.info(f"User {user_id} switched to {new_room}")
+    # 2. Check kro user pehlay kis channel me tha
+    # (Ab hum 'channel_name' use kr rahay hain taake send_message k sath match ho)
+    old_channel = session.get('channel_name') 
     
-#     # Optional: Notify others in that room
-#     # await sio_server.emit('user_status', {'id': user_id, 'status': 'online'}, room=new_room)
+    new_channel = data.get('channel_name')
 
+    if not new_channel:
+        return
+
+    # 3. CONTEXT SWITCHING (Purana choro, Naya pakro)
+    if old_channel and old_channel != new_channel:
+        sio_server.leave_room(sid, old_channel)
+        logger.info(f"User {user_id} left {old_channel}")
+
+    # 4. Enter New Room
+    sio_server.enter_room(sid, new_channel)
+    
+    # 5. UPDATE SESSION (Securely)
+    # **session ka matlab h purana data (user_id etc) retain kro
+    await sio_server.save_session(sid, {**session, 'channel_name': new_channel})
+
+    logger.info(f"User {user_id} switched context to {new_channel}")
 
 
 @sio_server.event
