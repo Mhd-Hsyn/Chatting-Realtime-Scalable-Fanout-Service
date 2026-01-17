@@ -35,34 +35,34 @@ async def connect(sid, environ, auth):
     await sio_server.emit('connection_success', {'sid': sid})
 
 
-# @sio_server.event
-# async def join_channel(sid, data):
-#     logger.info("join_channel is running")
+@sio_server.event
+async def join_channel(sid, data):
+    logger.info("join_channel is running")
 
     
-#     if not isinstance(data, dict):
-#         print(f"Invalid data format received: {data}")
-#         return
+    if not isinstance(data, dict):
+        print(f"Invalid data format received: {data}")
+        return
 
-#     # Log the received data for debugging
-#     print(f"Received join_channel data: {data}")
+    # Log the received data for debugging
+    print(f"Received join_channel data: {data}")
 
-#     channel_name = data.get('channel_name')
-#     user_data = data.get('user_data')
+    channel_name = data.get('channel_name')
+    user_data = data.get('user_data')
 
-#     if not channel_name or not user_data:
-#         print(f"Missing channel_name or user_data in: {data}")
-#         return
+    if not channel_name or not user_data:
+        print(f"Missing channel_name or user_data in: {data}")
+        return
 
-#     session_data = {'channel_name': channel_name, 'user_data': user_data}
-#     await sio_server.save_session(sid, session_data)
+    session_data = {'channel_name': channel_name, 'user_data': user_data}
+    await sio_server.save_session(sid, session_data)
 
-#     if channel_name:
-#         sio_server.enter_room(sid, channel_name)
-#         await sio_server.emit('user_joined', {'user_data': user_data}, room=channel_name, skip_sid=sid)
-#         print(f"\n\n JOIN SUCCESSFULLY ------- {user_data} \n\n")
-#     else:
-#         print(f"Error: Channel name is None. Cannot join room.")
+    if channel_name:
+        sio_server.enter_room(sid, channel_name)
+        await sio_server.emit('user_joined', {'user_data': user_data}, room=channel_name, skip_sid=sid)
+        print(f"\n\n JOIN SUCCESSFULLY ------- {user_data} \n\n")
+    else:
+        print(f"Error: Channel name is None. Cannot join room.")
 
 
 
@@ -137,37 +137,37 @@ async def connect(sid, environ, auth):
 
 
 
-@sio_server.event
-async def join_channel(sid, data):
-    # 1. Session data uthao
-    session = await sio_server.get_session(sid)
-    user_id = session.get('user_id')
-    old_room = session.get('active_room')
-    print("old_room __________ ", old_room)
+# @sio_server.event
+# async def join_channel(sid, data):
+#     # 1. Session data uthao
+#     session = await sio_server.get_session(sid)
+#     user_id = session.get('user_id')
+#     old_room = session.get('active_room')
+#     print("old_room __________ ", old_room)
     
-    new_room = data.get('channel_name') # e.g., 'chat_55'
-    print("new_room __________ ", new_room)
+#     new_room = data.get('channel_name') # e.g., 'chat_55'
+#     print("new_room __________ ", new_room)
 
-    if not new_room:
-        return
+#     if not new_room:
+#         return
 
-    # 2. PURANA ROOM CHORO (Cleanup)
-    # Agar user pehlay 'chat_44' me tha, usay wahan se nikalo
-    if old_room and (old_room != new_room):
-        sio_server.leave_room(sid, old_room)
-        logger.info(f"User {user_id} left {old_room}")
+#     # 2. PURANA ROOM CHORO (Cleanup)
+#     # Agar user pehlay 'chat_44' me tha, usay wahan se nikalo
+#     if old_room and (old_room != new_room):
+#         sio_server.leave_room(sid, old_room)
+#         logger.info(f"User {user_id} left {old_room}")
 
-    # 3. NAYA ROOM JOIN KRO
-    sio_server.enter_room(sid, new_room)
+#     # 3. NAYA ROOM JOIN KRO
+#     sio_server.enter_room(sid, new_room)
     
-    # 4. Session Update kro
-    # Note: Hum poora session overwrite nhi kr rahay, sirf update kr rahay hain
-    await sio_server.save_session(sid, {**session, 'active_room': new_room})
+#     # 4. Session Update kro
+#     # Note: Hum poora session overwrite nhi kr rahay, sirf update kr rahay hain
+#     await sio_server.save_session(sid, {**session, 'active_room': new_room})
 
-    logger.info(f"User {user_id} switched to {new_room}")
+#     logger.info(f"User {user_id} switched to {new_room}")
     
-    # Optional: Notify others in that room
-    # await sio_server.emit('user_status', {'id': user_id, 'status': 'online'}, room=new_room)
+#     # Optional: Notify others in that room
+#     # await sio_server.emit('user_status', {'id': user_id, 'status': 'online'}, room=new_room)
 
 
 
