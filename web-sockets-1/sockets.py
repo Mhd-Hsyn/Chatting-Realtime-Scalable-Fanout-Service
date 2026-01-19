@@ -2,10 +2,11 @@ import logging
 import socketio
 from helpers import verify_jwt_token
 from core.config import (
-    redis_host,
-    redis_password,
-    redis_port,
-    redis_realtime_socket_db
+    redis_url
+)
+from redis_utils import (
+    set_user_active_room,
+    remove_user_active_room
 )
 
 # Configure Logging
@@ -24,7 +25,6 @@ logger = logging.getLogger("socktet_server_1")
 # =========================================================
 # Ye manager tumhare sessions aur rooms ko Redis me handle karega
 # 'write_only=False' ka matlab h ye server Redis se read b karega
-redis_url = f'redis://:{redis_password}@{redis_host}:{redis_port}/{redis_realtime_socket_db}'
 print(f"Connecting to: {redis_url}")
 mgr = socketio.AsyncRedisManager(redis_url,write_only=False)
 
@@ -32,7 +32,7 @@ mgr = socketio.AsyncRedisManager(redis_url,write_only=False)
 # 2. SERVER INITIALIZATION WITH MANAGER
 # =========================================================
 sio_server = socketio.AsyncServer(
-    # client_manager=mgr,
+    client_manager=mgr,
     async_mode='asgi',
     cors_allowed_origins=[],
     logger=True,
@@ -126,53 +126,215 @@ async def connect(sid, environ, auth):
 
 
 
+# @sio_server.event
+# async def join_channel(sid, data):
+
+# OLD
+
+#     # 1. Session uthao (Jo Connect k waqt bana tha)
+#     session = await sio_server.get_session(sid)
+#     user_id = session.get('user_id') 
+    
+#     # 2. Check kro user pehlay kis channel me tha
+#     # (Ab hum 'channel_name' use kr rahay hain taake send_message k sath match ho)
+#     old_channel = session.get('channel_name') 
+    
+#     new_channel = data.get('channel_name')
+
+#     if not new_channel:
+#         return
+
+#     # 3. CONTEXT SWITCHING (Purana choro, Naya pakro)
+#     if old_channel and old_channel != new_channel:
+#         sio_server.leave_room(sid, old_channel)
+#         logger.info(f"User {user_id} left {old_channel}")
+
+#     # 4. Enter New Room
+#     sio_server.enter_room(sid, new_channel)
+    
+#     # 5. UPDATE SESSION (Securely)
+#     # **session ka matlab h purana data (user_id etc) retain kro
+#     await sio_server.save_session(sid, {**session, 'channel_name': new_channel})
+
+#     logger.info(f"User {user_id} switched context to {new_channel}")
+
+
+
 
 @sio_server.event
 async def join_channel(sid, data):
-    # 1. Session uthao (Jo Connect k waqt bana tha)
     session = await sio_server.get_session(sid)
-    user_id = session.get('user_id') 
+    user_id = session.get('user_id') # User ID zaroori h
+    new_room = data.get('channel_name')
     
-    # 2. Check kro user pehlay kis channel me tha
-    # (Ab hum 'channel_name' use kr rahay hain taake send_message k sath match ho)
-    old_channel = session.get('channel_name') 
+    if not new_room: return
+
+    # 1. Old Room handling (Slot 1)
+    old_room = session.get('active_chat_room') 
+    if old_room and old_room != new_room:
+        sio_server.leave_room(sid, old_room)
+
+    # 2. Join New Room
+    sio_server.enter_room(sid, new_room)
     
-    new_channel = data.get('channel_name')
+    # 3. Session Update (RAM)
+    await sio_server.save_session(sid, {
+        **session, 
+        'active_chat_room': new_room 
+    })
 
-    if not new_channel:
-        return
+    # 4. --- 🔥 REDIS PRESENCE UPDATE (THE FIX) ---
+    if user_id:
+        await set_user_active_room(user_id, new_room)
+        print(f"✅ Redis Updated: User {user_id} is watching {new_room}")
 
-    # 3. CONTEXT SWITCHING (Purana choro, Naya pakro)
-    if old_channel and old_channel != new_channel:
-        sio_server.leave_room(sid, old_channel)
-        logger.info(f"User {user_id} left {old_channel}")
+    print(f"Joined Slot 1: {new_room}")
 
-    # 4. Enter New Room
-    sio_server.enter_room(sid, new_channel)
+# @sio_server.event
+# async def join_channel(sid, data):
+#     """
+#     Chatting Channel to join specific room
+#     {
+#         'user_id': 101,
+#         'user_data': {...},
+        
+#         # KEY (Naam)           # VALUE (Asli Room ID)
+#         'active_chat_room':    'case_555',
+        
+#         'active_alert_room':   None
+#     }
+#     """
+#     session = await sio_server.get_session(sid)
+#     new_room = data.get('channel_name')
     
-    # 5. UPDATE SESSION (Securely)
-    # **session ka matlab h purana data (user_id etc) retain kro
-    await sio_server.save_session(sid, {**session, 'channel_name': new_channel})
+#     if not new_room: return
 
-    logger.info(f"User {user_id} switched context to {new_channel}")
+#     # --- SLOT 1 LOGIC ---
+#     # Sirf Slot 1 wala purana room check kro
+#     old_room = session.get('active_chat_room') 
+
+#     # Agar purana room h aur wo naye se alag h, to usay LEAVE kro
+#     if old_room and old_room != new_room:
+#         sio_server.leave_room(sid, old_room)
+#         print(f"Switched Slot 1: Left {old_room}")
+
+#     sio_server.enter_room(sid, new_room)
+    
+#     # Session update (Save specifically to 'active_chat_room')
+#     await sio_server.save_session(sid, {
+#         **session, 
+#         'active_chat_room': new_room 
+#     })
+
+#     print("session _____________________ ", session)
+    
+#     print(f"Joined Slot 1: {new_room}")
+
+
+
+@sio_server.event
+async def join_channel2(sid, data):
+    """
+    Any other channel
+    {
+        'user_id': 101,
+        'user_data': {...},
+        
+        # KEY (Naam)           # VALUE (Asli Room ID)
+        'active_chat_room':    'case_555',
+        
+        'active_alert_room':   None
+    }
+    """
+    session = await sio_server.get_session(sid)
+    new_room = data.get('channel_name')
+    
+    if not new_room: return
+
+    # --- SLOT 2 LOGIC ---
+    # Sirf Slot 2 wala purana room check kro
+    old_room = session.get('active_alert_room') 
+
+    # Logic bilkul same h, bas variable alag h
+    if old_room and old_room != new_room:
+        sio_server.leave_room(sid, old_room)
+        print(f"Switched Slot 2: Left {old_room}")
+
+    sio_server.enter_room(sid, new_room)
+    
+    # Session update (Save specifically to 'active_alert_room')
+    await sio_server.save_session(sid, {
+        **session, 
+        'active_alert_room': new_room 
+    })
+
+    print("session _____________________ ", session)
+    
+    print(f"Joined Slot 2: {new_room}")
+
 
 
 @sio_server.event
 async def send_message(sid, data):
     """
     Handle messages sent by a user to a channel.
+    {
+        'user_id': 101,
+        'user_data': {...},
+        
+        # KEY (Naam)           # VALUE (Asli Room ID)
+        'active_chat_room':    'case_555',
+        
+        'active_alert_room':   None
+    }
     """
     session = await sio_server.get_session(sid)
-    channel_name = session.get('channel_name')
-    user_data = session.get('user_data')
 
+    # --- BUG FIX HERE ---
+    # Humne key ka naam 'active_chat_room' rakha tha, 'channel_name' nahi.
+    # Usually user message "Chat Slot" me bhejta hai, Alerts slot me nahi.
+    current_room = session.get('active_chat_room') 
+
+    user_data = session.get('user_data')
     message = data.get('message')
-    if not message or not channel_name:
+
+    if not message:
+        return
+
+    if not current_room:
+        await sio_server.emit('error', {'msg': 'Please join a chat room first'}, to=sid)
         return
 
     # Broadcast the message to the channel
-    await sio_server.emit('new_message', {'user_data': user_data, 'message': message}, room=channel_name)
-    print(f'Message from {user_data} in channel {channel_name}: {message}')
+    # Yahan ham wahi data bhej rahay hain jo frontend ko chahiye
+    response_payload = {
+        'user_data': user_data, 
+        'message': message,
+        'channel_name': current_room # Frontend ko pata chalay ye kis room ka msg h
+    }
+    await sio_server.emit('new_message', response_payload, room=current_room)
+    # Logs for debugging
+    print(f'Message sent to {current_room}: {message}')
+
+
+
+
+# @sio_server.event
+# async def send_message(sid, data):
+#     """
+#     Handle messages sent by a user to a channel.
+#     """
+#     session = await sio_server.get_session(sid)
+#     channel_name = session.get('channel_name') 
+#     user_data = session.get('user_data')
+
+#     message = data.get('message')
+#     if not message or not channel_name:
+#         return
+
+#     # Broadcast the message to the channel
+#     await sio_server.emit('new_message', {'user_data': user_data, 'message': message}, room=channel_name)
+#     print(f'Message from {user_data} in channel {channel_name}: {message}')
 
 
 
@@ -214,10 +376,15 @@ async def disconnect(sid):
     session = await sio_server.get_session(sid)
     channel_name = session.get('channel_name')
     user_data = session.get('user_data')
+    user_id = session.get('user_id')
+
+    if user_id:
+        await remove_user_active_room(user_id)
 
     if channel_name:
         sio_server.leave_room(sid, channel_name)
         await sio_server.emit('user_left', {'user_data': user_data}, room=channel_name)
+
     print(f'{sid} disconnected')
 
 

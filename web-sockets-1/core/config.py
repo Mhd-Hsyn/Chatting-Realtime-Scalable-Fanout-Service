@@ -16,3 +16,5 @@ redis_password= config("REDIS_PASSWORD")
 redis_realtime_socket_db= config("REDIS_REALTIME_SOCKET_DB")
 
 redis_password = urllib.parse.quote(redis_password)
+
+redis_url = f'redis://:{redis_password}@{redis_host}:{redis_port}/{redis_realtime_socket_db}'
