@@ -1,6 +1,12 @@
 import logging
 import socketio
 from helpers import verify_jwt_token
+from core.config import (
+    redis_host,
+    redis_password,
+    redis_port,
+    redis_realtime_socket_db
+)
 
 # Configure Logging
 logging.basicConfig(
@@ -12,8 +18,21 @@ logging.basicConfig(
 
 logger = logging.getLogger("socktet_server_1")
 
-# Initialize Socket.IO server
+
+# =========================================================
+# 1. REDIS MANAGER SETUP (The Magic Line)
+# =========================================================
+# Ye manager tumhare sessions aur rooms ko Redis me handle karega
+# 'write_only=False' ka matlab h ye server Redis se read b karega
+redis_url = f'redis://:{redis_password}@{redis_host}:{redis_port}/{redis_realtime_socket_db}'
+print(f"Connecting to: {redis_url}")
+mgr = socketio.AsyncRedisManager(redis_url,write_only=False)
+
+# =========================================================
+# 2. SERVER INITIALIZATION WITH MANAGER
+# =========================================================
 sio_server = socketio.AsyncServer(
+    # client_manager=mgr,
     async_mode='asgi',
     cors_allowed_origins=[],
     logger=True,

@@ -76,6 +76,7 @@ def rabitmq_consumer_callback(ch, method, properties, body)->bool:
         message = body.decode()
         user_payload = json.loads(message)
         logging.info(f"Received message: {user_payload}")
+        print("Received message: ___________", user_payload)
         
         channel_name = user_payload["channel_name"]
         payload = user_payload["payload"]

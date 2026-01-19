@@ -90,7 +90,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.0.1/dist/socket.io.min.js"></script>
     <script>
-        const socket = io('http://localhost:5009'); // Your server address
+        const socket = io('http://localhost:5007'); // Your server address
         let currentChannel = null;
         let currentUser = null;
     
@@ -152,8 +152,11 @@
     
         // Listen for user join notifications
         socket.on('user_joined', (data) => {
-            const message = `${data.user_data} has joined the channel.`;
-            appendMessage(message, 'user-joined');
+
+            console.log("user_joined event is trigger=====>",data)
+
+            //const message = `${data.user_data} has joined the channel.`;
+            //appendMessage(message, 'user-joined');
         });
     
         // Listen for user leave notifications
