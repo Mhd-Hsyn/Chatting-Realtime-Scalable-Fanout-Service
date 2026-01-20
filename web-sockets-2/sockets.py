@@ -232,45 +232,45 @@ async def join_channel(sid, data):
 
 
 
-@sio_server.event
-async def join_channel2(sid, data):
-    """
-    Any other channel
-    {
-        'user_id': 101,
-        'user_data': {...},
+# @sio_server.event
+# async def join_channel2(sid, data):
+#     """
+#     Any other channel
+#     {
+#         'user_id': 101,
+#         'user_data': {...},
         
-        # KEY (Naam)           # VALUE (Asli Room ID)
-        'active_chat_room':    'case_555',
+#         # KEY (Naam)           # VALUE (Asli Room ID)
+#         'active_chat_room':    'case_555',
         
-        'active_alert_room':   None
-    }
-    """
-    session = await sio_server.get_session(sid)
-    new_room = data.get('channel_name')
+#         'active_alert_room':   None
+#     }
+#     """
+#     session = await sio_server.get_session(sid)
+#     new_room = data.get('channel_name')
     
-    if not new_room: return
+#     if not new_room: return
 
-    # --- SLOT 2 LOGIC ---
-    # Sirf Slot 2 wala purana room check kro
-    old_room = session.get('active_alert_room') 
+#     # --- SLOT 2 LOGIC ---
+#     # Sirf Slot 2 wala purana room check kro
+#     old_room = session.get('active_alert_room') 
 
-    # Logic bilkul same h, bas variable alag h
-    if old_room and old_room != new_room:
-        sio_server.leave_room(sid, old_room)
-        print(f"Switched Slot 2: Left {old_room}")
+#     # Logic bilkul same h, bas variable alag h
+#     if old_room and old_room != new_room:
+#         sio_server.leave_room(sid, old_room)
+#         print(f"Switched Slot 2: Left {old_room}")
 
-    sio_server.enter_room(sid, new_room)
+#     sio_server.enter_room(sid, new_room)
     
-    # Session update (Save specifically to 'active_alert_room')
-    await sio_server.save_session(sid, {
-        **session, 
-        'active_alert_room': new_room 
-    })
+#     # Session update (Save specifically to 'active_alert_room')
+#     await sio_server.save_session(sid, {
+#         **session, 
+#         'active_alert_room': new_room 
+#     })
 
-    print("session _____________________ ", session)
+#     print("session _____________________ ", session)
     
-    print(f"Joined Slot 2: {new_room}")
+#     print(f"Joined Slot 2: {new_room}")
 
 
 
@@ -368,26 +368,45 @@ async def leave_channel(sid, data):
         print(f"No channel found for SID {sid}")
 
 
+
 @sio_server.event
 async def disconnect(sid):
     """
     Handle disconnection and notify the channel.
     """
-    session = await sio_server.get_session(sid)
-    channel_name = session.get('channel_name')
+    # 1. Session uthao
+    try:
+        session = await sio_server.get_session(sid)
+    except:
+        return # Agar session hi nahi h to kuch krne ki zaroorat nahi
+
     user_data = session.get('user_data')
     user_id = session.get('user_id')
 
-    print("DISCONNECT _________ ",user_id)
+    # Tumhare join_channel me 'active_chat_room' use ho raha h
+    # Aur join_channel2 me 'active_alert_room' use ho raha h
+    
+    chat_room = session.get('active_chat_room')
+    alert_room = session.get('active_alert_room')
 
+    # 1. Redis Presence Clean kro (Sab se Zaroori)
     if user_id:
         await remove_user_active_chat_room(user_id)
+        print(f"🧹 Redis Cleaned: User {user_id} presence removed")
 
-    if channel_name:
-        sio_server.leave_room(sid, channel_name)
-        await sio_server.emit('user_left', {'user_data': user_data}, room=channel_name)
+    # 2. Chat Room se nikalo & Notify kro
+    if chat_room:
+        sio_server.leave_room(sid, chat_room)
+        # Optional: Agar tum chahte ho k dosto ko pata chale wo offline ho gaya
+        # await sio_server.emit('user_left', {'user_data': user_data}, room=chat_room)
+        print(f"User left Chat Room: {chat_room}")
 
-    print(f'{sid} disconnected')
+    # 3. Alert Room se nikalo
+    if alert_room:
+        sio_server.leave_room(sid, alert_room)
+        print(f"User left Alert Room: {alert_room}")
+
+    print(f'❌ {sid} disconnected fully')
 
 
 

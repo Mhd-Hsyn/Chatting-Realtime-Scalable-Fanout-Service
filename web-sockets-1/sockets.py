@@ -64,6 +64,17 @@ async def connect(sid, environ, auth):
     """
     Robust Connect Handler
     Supports both Standard Auth (Frontend) and Headers (Postman)
+
+    server_sockets = {
+    "sid_xyz_123": {  # <--- Ye SID hai
+        "session": {  # <--- Ye wo data h jo tumne save_session se dala
+            "user_id": 101,
+            "user_data": {"name": "Ali", "role": "admin"},
+            "active_chat_room": "case_555"
+        },
+        "rooms": ["user_101", "case_555"] # <--- User kin rooms me h
+    },
+
     """
     print(f"\n--- New Connection Request: {sid} ---")
     
@@ -312,19 +323,39 @@ async def disconnect(sid):
     """
     Handle disconnection and notify the channel.
     """
-    session = await sio_server.get_session(sid)
-    channel_name = session.get('channel_name')
+    # 1. Session uthao
+    try:
+        session = await sio_server.get_session(sid)
+    except:
+        return # Agar session hi nahi h to kuch krne ki zaroorat nahi
+
     user_data = session.get('user_data')
     user_id = session.get('user_id')
 
+    # Tumhare join_channel me 'active_chat_room' use ho raha h
+    # Aur join_channel2 me 'active_alert_room' use ho raha h
+    
+    chat_room = session.get('active_chat_room')
+    alert_room = session.get('active_alert_room')
+
+    # 1. Redis Presence Clean kro (Sab se Zaroori)
     if user_id:
         await remove_user_active_chat_room(user_id)
+        print(f"🧹 Redis Cleaned: User {user_id} presence removed")
 
-    if channel_name:
-        sio_server.leave_room(sid, channel_name)
-        await sio_server.emit('user_left', {'user_data': user_data}, room=channel_name)
+    # 2. Chat Room se nikalo & Notify kro
+    if chat_room:
+        sio_server.leave_room(sid, chat_room)
+        # Optional: Agar tum chahte ho k dosto ko pata chale wo offline ho gaya
+        # await sio_server.emit('user_left', {'user_data': user_data}, room=chat_room)
+        print(f"User left Chat Room: {chat_room}")
 
-    print(f'{sid} disconnected')
+    # 3. Alert Room se nikalo
+    if alert_room:
+        sio_server.leave_room(sid, alert_room)
+        print(f"User left Alert Room: {alert_room}")
+
+    print(f'❌ {sid} disconnected fully')
 
 
 
