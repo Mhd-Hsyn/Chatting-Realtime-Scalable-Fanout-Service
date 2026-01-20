@@ -36,7 +36,8 @@ sio_server = socketio.AsyncServer(
     async_mode='asgi',
     cors_allowed_origins=[],
     logger=True,
-    engineio_logger=True
+    engineio_logger=True,
+    # serializer='msgpack'       # Bytes instead of JSON for Fast
 )
 
 # Wrap the server with an ASGI app
@@ -177,6 +178,7 @@ async def join_channel(sid, data):
     session = await sio_server.get_session(sid)
     user_id = session.get('user_id') # User ID zaroori h
     new_room = data.get('channel_name')
+    print("new_room === ", new_room)
     
     if not new_room: return
 
