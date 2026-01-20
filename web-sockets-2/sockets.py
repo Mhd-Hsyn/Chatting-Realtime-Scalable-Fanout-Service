@@ -5,8 +5,8 @@ from core.config import (
     redis_url
 )
 from redis_utils import (
-    set_user_active_room,
-    remove_user_active_room
+    set_user_active_chat_room,
+    remove_user_active_chat_room
 )
 
 # Configure Logging
@@ -185,7 +185,7 @@ async def join_channel(sid, data):
 
     # 4. --- 🔥 REDIS PRESENCE UPDATE (THE FIX) ---
     if user_id:
-        await set_user_active_room(user_id, new_room)
+        await set_user_active_chat_room(user_id, new_room)
         print(f"✅ Redis Updated: User {user_id} is watching {new_room}")
 
     print(f"Joined Slot 1: {new_room}")
@@ -381,7 +381,7 @@ async def disconnect(sid):
     print("DISCONNECT _________ ",user_id)
 
     if user_id:
-        await remove_user_active_room(user_id)
+        await remove_user_active_chat_room(user_id)
 
     if channel_name:
         sio_server.leave_room(sid, channel_name)

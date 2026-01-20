@@ -5,8 +5,8 @@ from core.config import (
     redis_url
 )
 from redis_utils import (
-    set_user_active_room,
-    remove_user_active_room
+    set_user_active_chat_room,
+    remove_user_active_chat_room
 )
 
 # Configure Logging
@@ -185,51 +185,10 @@ async def join_channel(sid, data):
 
     # 4. --- 🔥 REDIS PRESENCE UPDATE (THE FIX) ---
     if user_id:
-        await set_user_active_room(user_id, new_room)
+        await set_user_active_chat_room(user_id, new_room)
         print(f"✅ Redis Updated: User {user_id} is watching {new_room}")
 
     print(f"Joined Slot 1: {new_room}")
-
-# @sio_server.event
-# async def join_channel(sid, data):
-#     """
-#     Chatting Channel to join specific room
-#     {
-#         'user_id': 101,
-#         'user_data': {...},
-        
-#         # KEY (Naam)           # VALUE (Asli Room ID)
-#         'active_chat_room':    'case_555',
-        
-#         'active_alert_room':   None
-#     }
-#     """
-#     session = await sio_server.get_session(sid)
-#     new_room = data.get('channel_name')
-    
-#     if not new_room: return
-
-#     # --- SLOT 1 LOGIC ---
-#     # Sirf Slot 1 wala purana room check kro
-#     old_room = session.get('active_chat_room') 
-
-#     # Agar purana room h aur wo naye se alag h, to usay LEAVE kro
-#     if old_room and old_room != new_room:
-#         sio_server.leave_room(sid, old_room)
-#         print(f"Switched Slot 1: Left {old_room}")
-
-#     sio_server.enter_room(sid, new_room)
-    
-#     # Session update (Save specifically to 'active_chat_room')
-#     await sio_server.save_session(sid, {
-#         **session, 
-#         'active_chat_room': new_room 
-#     })
-
-#     print("session _____________________ ", session)
-    
-#     print(f"Joined Slot 1: {new_room}")
-
 
 
 @sio_server.event
@@ -318,27 +277,6 @@ async def send_message(sid, data):
 
 
 
-
-# @sio_server.event
-# async def send_message(sid, data):
-#     """
-#     Handle messages sent by a user to a channel.
-#     """
-#     session = await sio_server.get_session(sid)
-#     channel_name = session.get('channel_name') 
-#     user_data = session.get('user_data')
-
-#     message = data.get('message')
-#     if not message or not channel_name:
-#         return
-
-#     # Broadcast the message to the channel
-#     await sio_server.emit('new_message', {'user_data': user_data, 'message': message}, room=channel_name)
-#     print(f'Message from {user_data} in channel {channel_name}: {message}')
-
-
-
-
 @sio_server.event
 async def leave_channel(sid, data):
     logger.info("leave_channel is running")
@@ -368,6 +306,7 @@ async def leave_channel(sid, data):
         print(f"No channel found for SID {sid}")
 
 
+
 @sio_server.event
 async def disconnect(sid):
     """
@@ -379,7 +318,7 @@ async def disconnect(sid):
     user_id = session.get('user_id')
 
     if user_id:
-        await remove_user_active_room(user_id)
+        await remove_user_active_chat_room(user_id)
 
     if channel_name:
         sio_server.leave_room(sid, channel_name)
