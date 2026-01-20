@@ -6,7 +6,12 @@ from core.config import (
 )
 from redis_utils import (
     set_user_active_chat_room,
-    remove_user_active_chat_room
+    remove_user_active_chat_room,
+    mark_user_online,
+    remove_user_online,
+    get_user_active_chat_room,
+    mark_user_online,
+
 )
 
 # Configure Logging
@@ -38,7 +43,6 @@ sio_server = socketio.AsyncServer(
     logger=True,
     engineio_logger=True,
     # serializer='msgpack'       # Bytes instead of JSON for Fast
-
 )
 
 # Wrap the server with an ASGI app
@@ -66,6 +70,17 @@ async def connect(sid, environ, auth):
     """
     Robust Connect Handler
     Supports both Standard Auth (Frontend) and Headers (Postman)
+
+    server_sockets = {
+    "sid_xyz_123": {  # <--- Ye SID hai
+        "session": {  # <--- Ye wo data h jo tumne save_session se dala
+            "user_id": 101,
+            "user_data": {"name": "Ali", "role": "admin"},
+            "active_chat_room": "case_555"
+        },
+        "rooms": ["user_101", "case_555"] # <--- User kin rooms me h
+    },
+
     """
     print(f"\n--- New Connection Request: {sid} ---")
     
@@ -119,9 +134,13 @@ async def connect(sid, environ, auth):
         'user_data': user_payload
     })
     
-    # Auto-join Personal Room
+    # Auto-join Personal Room for Notification
     user_room = f"user_{user_id}"
     sio_server.enter_room(sid, user_room)
+
+    # 2. MARK USER ONLINE IN REDIS (Global Status)
+    await mark_user_online(user_id)
+    print(f"✅ Redis: User {user_id} marked ONLINE")
     
     print(f"✅ User {user_id} Connected via {'Auth Dict' if auth else 'Headers'}")
     await sio_server.emit('connection_success', {'sid': sid})
@@ -193,87 +212,46 @@ async def join_channel(sid, data):
 
     print(f"Joined Slot 1: {new_room}")
 
-# @sio_server.event
-# async def join_channel(sid, data):
-#     """
-#     Chatting Channel to join specific room
-#     {
-#         'user_id': 101,
-#         'user_data': {...},
+
+@sio_server.event
+async def join_channel2(sid, data):
+    """
+    Any other channel
+    {
+        'user_id': 101,
+        'user_data': {...},
         
-#         # KEY (Naam)           # VALUE (Asli Room ID)
-#         'active_chat_room':    'case_555',
+        # KEY (Naam)           # VALUE (Asli Room ID)
+        'active_chat_room':    'case_555',
         
-#         'active_alert_room':   None
-#     }
-#     """
-#     session = await sio_server.get_session(sid)
-#     new_room = data.get('channel_name')
+        'active_alert_room':   None
+    }
+    """
+    session = await sio_server.get_session(sid)
+    new_room = data.get('channel_name')
     
-#     if not new_room: return
+    if not new_room: return
 
-#     # --- SLOT 1 LOGIC ---
-#     # Sirf Slot 1 wala purana room check kro
-#     old_room = session.get('active_chat_room') 
+    # --- SLOT 2 LOGIC ---
+    # Sirf Slot 2 wala purana room check kro
+    old_room = session.get('active_alert_room') 
 
-#     # Agar purana room h aur wo naye se alag h, to usay LEAVE kro
-#     if old_room and old_room != new_room:
-#         sio_server.leave_room(sid, old_room)
-#         print(f"Switched Slot 1: Left {old_room}")
+    # Logic bilkul same h, bas variable alag h
+    if old_room and old_room != new_room:
+        sio_server.leave_room(sid, old_room)
+        print(f"Switched Slot 2: Left {old_room}")
 
-#     sio_server.enter_room(sid, new_room)
+    sio_server.enter_room(sid, new_room)
     
-#     # Session update (Save specifically to 'active_chat_room')
-#     await sio_server.save_session(sid, {
-#         **session, 
-#         'active_chat_room': new_room 
-#     })
+    # Session update (Save specifically to 'active_alert_room')
+    await sio_server.save_session(sid, {
+        **session, 
+        'active_alert_room': new_room 
+    })
 
-#     print("session _____________________ ", session)
+    print("session _____________________ ", session)
     
-#     print(f"Joined Slot 1: {new_room}")
-
-
-
-# @sio_server.event
-# async def join_channel2(sid, data):
-#     """
-#     Any other channel
-#     {
-#         'user_id': 101,
-#         'user_data': {...},
-        
-#         # KEY (Naam)           # VALUE (Asli Room ID)
-#         'active_chat_room':    'case_555',
-        
-#         'active_alert_room':   None
-#     }
-#     """
-#     session = await sio_server.get_session(sid)
-#     new_room = data.get('channel_name')
-    
-#     if not new_room: return
-
-#     # --- SLOT 2 LOGIC ---
-#     # Sirf Slot 2 wala purana room check kro
-#     old_room = session.get('active_alert_room') 
-
-#     # Logic bilkul same h, bas variable alag h
-#     if old_room and old_room != new_room:
-#         sio_server.leave_room(sid, old_room)
-#         print(f"Switched Slot 2: Left {old_room}")
-
-#     sio_server.enter_room(sid, new_room)
-    
-#     # Session update (Save specifically to 'active_alert_room')
-#     await sio_server.save_session(sid, {
-#         **session, 
-#         'active_alert_room': new_room 
-#     })
-
-#     print("session _____________________ ", session)
-    
-#     print(f"Joined Slot 2: {new_room}")
+    print(f"Joined Slot 2: {new_room}")
 
 
 
@@ -321,27 +299,6 @@ async def send_message(sid, data):
 
 
 
-
-# @sio_server.event
-# async def send_message(sid, data):
-#     """
-#     Handle messages sent by a user to a channel.
-#     """
-#     session = await sio_server.get_session(sid)
-#     channel_name = session.get('channel_name') 
-#     user_data = session.get('user_data')
-
-#     message = data.get('message')
-#     if not message or not channel_name:
-#         return
-
-#     # Broadcast the message to the channel
-#     await sio_server.emit('new_message', {'user_data': user_data, 'message': message}, room=channel_name)
-#     print(f'Message from {user_data} in channel {channel_name}: {message}')
-
-
-
-
 @sio_server.event
 async def leave_channel(sid, data):
     logger.info("leave_channel is running")
@@ -372,6 +329,50 @@ async def leave_channel(sid, data):
 
 
 
+# 1. GLOBAL HEARTBEAT (Har 30-50 sec baad)
+@sio_server.event
+async def heartbeat_global(sid, data):
+    """
+    App open h? User Zinda h? Bas ye batao.
+    """
+    session = await sio_server.get_session(sid)
+    user_id = session.get('user_id')
+
+    if user_id:
+        await mark_user_online(user_id)
+        # print(f"🌍 Global Heartbeat: {user_id}")
+
+
+
+
+# # 2. ROOM HEARTBEAT (Har 15-20 sec baad)
+# @sio_server.event
+# async def heartbeat_room(sid, data):
+#     """
+#     Ye sirf tab call hoga jab User ne Chat Box khola hua h.
+#     Payload: {'room_id': '555'}
+#     """
+#     session = await sio_server.get_session(sid)
+#     user_id = session.get('user_id')
+#     room_id = data.get('room_id') # <--- Client ko room_id bhejna lazmi h
+
+#     if user_id and room_id:
+#         success = await refresh_user_chat_presence(user_id, room_id)
+        
+#         if not success:
+#             # Agar Redis me key nahi mili (Expired), to Client ko bolo dubara Join kare
+#             # Ye Self-Healing logic h
+#             print(f"⚠️ Room Heartbeat Failed for {user_id}. Re-joining...")
+            
+#             # Optional: Dobara presence set krdo (Security risk kam h yahan)
+#             from redis_utils import set_user_active_chat_room
+#             await set_user_active_chat_room(user_id, room_id
+
+
+
+
+
+
 @sio_server.event
 async def disconnect(sid):
     """
@@ -396,6 +397,8 @@ async def disconnect(sid):
     if user_id:
         await remove_user_active_chat_room(user_id)
         print(f"🧹 Redis Cleaned: User {user_id} presence removed")
+
+        await remove_user_online(user_id)
 
     # 2. Chat Room se nikalo & Notify kro
     if chat_room:

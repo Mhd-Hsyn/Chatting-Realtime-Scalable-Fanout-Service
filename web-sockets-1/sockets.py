@@ -6,7 +6,12 @@ from core.config import (
 )
 from redis_utils import (
     set_user_active_chat_room,
-    remove_user_active_chat_room
+    remove_user_active_chat_room,
+    mark_user_online,
+    remove_user_online,
+    get_user_active_chat_room,
+    mark_user_online,
+
 )
 
 # Configure Logging
@@ -129,9 +134,13 @@ async def connect(sid, environ, auth):
         'user_data': user_payload
     })
     
-    # Auto-join Personal Room
+    # Auto-join Personal Room for Notification
     user_room = f"user_{user_id}"
     sio_server.enter_room(sid, user_room)
+
+    # 2. MARK USER ONLINE IN REDIS (Global Status)
+    await mark_user_online(user_id)
+    print(f"✅ Redis: User {user_id} marked ONLINE")
     
     print(f"✅ User {user_id} Connected via {'Auth Dict' if auth else 'Headers'}")
     await sio_server.emit('connection_success', {'sid': sid})
@@ -320,6 +329,50 @@ async def leave_channel(sid, data):
 
 
 
+# 1. GLOBAL HEARTBEAT (Har 30-50 sec baad)
+@sio_server.event
+async def heartbeat_global(sid, data):
+    """
+    App open h? User Zinda h? Bas ye batao.
+    """
+    session = await sio_server.get_session(sid)
+    user_id = session.get('user_id')
+
+    if user_id:
+        await mark_user_online(user_id)
+        # print(f"🌍 Global Heartbeat: {user_id}")
+
+
+
+
+# # 2. ROOM HEARTBEAT (Har 15-20 sec baad)
+# @sio_server.event
+# async def heartbeat_room(sid, data):
+#     """
+#     Ye sirf tab call hoga jab User ne Chat Box khola hua h.
+#     Payload: {'room_id': '555'}
+#     """
+#     session = await sio_server.get_session(sid)
+#     user_id = session.get('user_id')
+#     room_id = data.get('room_id') # <--- Client ko room_id bhejna lazmi h
+
+#     if user_id and room_id:
+#         success = await refresh_user_chat_presence(user_id, room_id)
+        
+#         if not success:
+#             # Agar Redis me key nahi mili (Expired), to Client ko bolo dubara Join kare
+#             # Ye Self-Healing logic h
+#             print(f"⚠️ Room Heartbeat Failed for {user_id}. Re-joining...")
+            
+#             # Optional: Dobara presence set krdo (Security risk kam h yahan)
+#             from redis_utils import set_user_active_chat_room
+#             await set_user_active_chat_room(user_id, room_id
+
+
+
+
+
+
 @sio_server.event
 async def disconnect(sid):
     """
@@ -344,6 +397,8 @@ async def disconnect(sid):
     if user_id:
         await remove_user_active_chat_room(user_id)
         print(f"🧹 Redis Cleaned: User {user_id} presence removed")
+
+        await remove_user_online(user_id)
 
     # 2. Chat Room se nikalo & Notify kro
     if chat_room:
