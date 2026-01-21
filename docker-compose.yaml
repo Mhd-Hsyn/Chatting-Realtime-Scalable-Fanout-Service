@@ -16,27 +16,21 @@ services:
     networks:
       - law_firm_crm-backend-network
 
-  # websocket1:
-  #   build:
-  #     context: ./web-sockets-1
-  #     dockerfile: Dockerfile
-  #   container_name: websocket1
-  #   env_file: ./web-sockets-1/.env
-  #   depends_on:
-  #     - rabbitmq
-  #   ports:
-  #     - "5007:5007"
 
-  # websocket2:
-  #   build:
-  #     context: ./web-sockets-2
-  #     dockerfile: Dockerfile
-  #   container_name: websocket2
-  #   env_file: ./web-sockets-2/.env
-  #   depends_on:
-  #     - rabbitmq
-  #   ports:
-  #     - "5009:5009"
+  websocket2_fastapi_chatting_service:
+    build:
+      context: ./web-sockets-2
+      dockerfile: Dockerfile
+    container_name: "lawfirm-fastapi_chatting_service-web-sockets-2"
+    env_file: ./web-sockets-2/.env
+    restart: unless-stopped
+    # depends_on:
+    #   - rabbitmq
+    ports: 
+      - "9009:9009"
+    networks:
+      - law_firm_crm-backend-network
+
 
 
 volumes:
