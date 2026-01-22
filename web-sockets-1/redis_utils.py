@@ -29,7 +29,7 @@ async def remove_user_active_chat_room(user_id):
 #         await redis_client.expire(key, ONLINE_TTL)
 
 
-ONLINE_TTL = 10 # Seconds
+ONLINE_TTL = 100 # Seconds
 
 async def mark_user_online(user_id):
     """
