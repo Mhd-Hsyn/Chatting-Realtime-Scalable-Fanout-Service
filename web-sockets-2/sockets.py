@@ -9,9 +9,8 @@ from redis_utils import (
     remove_user_active_chat_room,
     mark_user_online,
     remove_user_online,
-    get_user_active_chat_room,
     mark_user_online,
-
+    set_user_ui_section,
 )
 
 # Configure Logging
@@ -147,40 +146,6 @@ async def connect(sid, environ, auth):
 
 
 
-# @sio_server.event
-# async def join_channel(sid, data):
-
-# OLD
-
-#     # 1. Session uthao (Jo Connect k waqt bana tha)
-#     session = await sio_server.get_session(sid)
-#     user_id = session.get('user_id') 
-    
-#     # 2. Check kro user pehlay kis channel me tha
-#     # (Ab hum 'channel_name' use kr rahay hain taake send_message k sath match ho)
-#     old_channel = session.get('channel_name') 
-    
-#     new_channel = data.get('channel_name')
-
-#     if not new_channel:
-#         return
-
-#     # 3. CONTEXT SWITCHING (Purana choro, Naya pakro)
-#     if old_channel and old_channel != new_channel:
-#         sio_server.leave_room(sid, old_channel)
-#         logger.info(f"User {user_id} left {old_channel}")
-
-#     # 4. Enter New Room
-#     sio_server.enter_room(sid, new_channel)
-    
-#     # 5. UPDATE SESSION (Securely)
-#     # **session ka matlab h purana data (user_id etc) retain kro
-#     await sio_server.save_session(sid, {**session, 'channel_name': new_channel})
-
-#     logger.info(f"User {user_id} switched context to {new_channel}")
-
-
-
 
 @sio_server.event
 async def join_channel(sid, data):
@@ -213,45 +178,105 @@ async def join_channel(sid, data):
     print(f"Joined Slot 1: {new_room}")
 
 
+# @sio_server.event
+# async def join_channel2(sid, data):
+#     """
+#     Any other channel
+#     {
+#         'user_id': 101,
+#         'user_data': {...},
+        
+#         # KEY (Naam)           # VALUE (Asli Room ID)
+#         'active_chat_room':    'case_555',
+        
+#         'active_alert_room':   None
+#     }
+#     """
+#     session = await sio_server.get_session(sid)
+#     new_room = data.get('channel_name')
+    
+#     if not new_room: return
+
+#     # --- SLOT 2 LOGIC ---
+#     # Sirf Slot 2 wala purana room check kro
+#     old_room = session.get('active_alert_room') 
+
+#     # Logic bilkul same h, bas variable alag h
+#     if old_room and old_room != new_room:
+#         sio_server.leave_room(sid, old_room)
+#         print(f"Switched Slot 2: Left {old_room}")
+
+#     sio_server.enter_room(sid, new_room)
+    
+#     # Session update (Save specifically to 'active_alert_room')
+#     await sio_server.save_session(sid, {
+#         **session, 
+#         'active_alert_room': new_room 
+#     })
+
+#     print("session _____________________ ", session)
+    
+#     print(f"Joined Slot 2: {new_room}")
+
+
+
+
 @sio_server.event
-async def join_channel2(sid, data):
+async def enter_ui_section(sid, data):
     """
-    Any other channel
+    Tracks which main tab/section the user is currently viewing.
+    Used for: Communication Tab, Dashboard, Settings, etc.
+    
+    Payload Example:
     {
-        'user_id': 101,
-        'user_data': {...},
-        
-        # KEY (Naam)           # VALUE (Asli Room ID)
-        'active_chat_room':    'case_555',
-        
-        'active_alert_room':   None
+        'section_name': 'communication_hub' 
     }
     """
     session = await sio_server.get_session(sid)
-    new_room = data.get('channel_name')
+    new_section = data.get('section_name')
+    user_id = session.get('user_id')
     
-    if not new_room: return
+    if not new_section: return
 
-    # --- SLOT 2 LOGIC ---
-    # Sirf Slot 2 wala purana room check kro
-    old_room = session.get('active_alert_room') 
+    # --- LOGIC: UI CONTEXT TRACKING ---
+    # Purana section check kro (Jese user 'Dashboard' se 'Communication' me aya)
+    old_section = session.get('active_ui_section') 
 
-    # Logic bilkul same h, bas variable alag h
-    if old_room and old_room != new_room:
-        sio_server.leave_room(sid, old_room)
-        print(f"Switched Slot 2: Left {old_room}")
+    # Agar purana section h aur wo naye se alag h, to usay LEAVE kro
+    # (Optional: Agar ap future me specific rooms banaty hain har tab k liye)
+    if old_section and old_section != new_section:
+        sio_server.leave_room(sid, old_section)
+        print(f"📉 Left UI Section: {old_section}")
 
-    sio_server.enter_room(sid, new_room)
-    
-    # Session update (Save specifically to 'active_alert_room')
+    # 1. Redis Update (CRITICAL)
+    await set_user_ui_section(user_id, new_section)
+    print(f"👀 Redis: User {user_id} is looking at {new_section}")
+
+    # 2. Session Update (RAM - for disconnect cleanup)
     await sio_server.save_session(sid, {
         **session, 
-        'active_alert_room': new_room 
+        'active_ui_section': new_section 
     })
-
-    print("session _____________________ ", session)
     
-    print(f"Joined Slot 2: {new_room}")
+    # 3. Room Join (Optional, but good for section-specific broadcasts)
+    sio_server.enter_room(sid, new_section)
+
+    print(f"👀 User is focused on: {new_section}")
+    
+    # Optional: Acknowledge the client
+    await sio_server.emit('ui_section_joined', {'section': new_section}, room=sid)
+
+
+@sio_server.event
+async def heartbeat_ui_section(sid, data):
+    """
+    Frontend har 30 sec baad bhejega agar user kisi Tab pr focus h.
+    Payload: {'section_name': 'communication_hub'}
+    """
+    session = await sio_server.get_session(sid)
+    user_id = session.get('user_id')
+    section_name = data.get('section_name')
+    await set_user_ui_section(user_id, section_name)
 
 
 

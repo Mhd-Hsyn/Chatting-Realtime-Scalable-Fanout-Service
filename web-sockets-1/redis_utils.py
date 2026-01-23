@@ -50,3 +50,15 @@ async def remove_user_online(user_id):
 
 
 
+SECTION_TTL = 100 # Seconds
+
+async def set_user_ui_section(user_id, section_name):
+    """Redis me save kro k user abhi kis Tab pr h"""
+    key = f"ui_section:{user_id}"
+    await redis_client.set(key, section_name, ex=SECTION_TTL)
+
+async def get_user_ui_section(user_id):
+    """Django (Publisher) k liye: Pata kro user kis Tab pr h"""
+    key = f"ui_section:{user_id}"
+    return await redis_client.get(key)
+
