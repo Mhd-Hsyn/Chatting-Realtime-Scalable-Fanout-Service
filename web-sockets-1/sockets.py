@@ -178,6 +178,57 @@ async def join_channel(sid, data):
     print(f"Joined Slot 1: {new_room}")
 
 
+@sio_server.event
+async def leave_channel(sid, data):
+    """
+    Cleanly exit the current chat room (Slot 1).
+    Clears RAM Session AND Redis Presence.
+    """
+    logger.info("leave_channel triggered")
+
+    try:
+        session = await sio_server.get_session(sid)
+    except KeyError:
+        return
+
+    user_id = session.get('user_id')
+    user_data = session.get('user_data')
+
+    # --- FIX 1: Correct Variable Name ---
+    # Humne join k waqt 'active_chat_room' rakha tha, wahi nikalo
+    current_room = session.get('active_chat_room')
+    
+    # Fallback: Agar session me nahi mila, to shayad frontend ne data me bheja ho
+    if not current_room:
+        current_room = data.get('channel_name')
+
+    if current_room:
+        # 1. Socket Leave (Actual disconnection from room)
+        sio_server.leave_room(sid, current_room)
+
+        # 2. Session Update (RAM Cleanup)
+        # Session ko batao k ab slot 1 khali h
+        await sio_server.save_session(sid, {
+            **session, 
+            'active_chat_room': None 
+        })
+
+        # 3. --- 🔥 REDIS PRESENCE CLEANUP (CRITICAL) ---
+        # Agar ye nahi kia to Notification kabhi nahi ayegi 
+        # kyunke system samjhega banda abhi b room me h
+        if user_id:
+            await remove_user_active_chat_room(user_id)
+            print(f"🧹 Redis Cleaned: User {user_id} removed from active presence")
+
+        # Optional: Notify others
+        # await sio_server.emit('user_left', {'user_data': user_data}, room=current_room)
+        
+        print(f"✅ User Left Slot 1: {current_room}")
+        
+    else:
+        print(f"⚠️ No active room found to leave for SID {sid}")
+
+
 # @sio_server.event
 # async def join_channel2(sid, data):
 #     """
@@ -324,33 +375,33 @@ async def send_message(sid, data):
 
 
 
-@sio_server.event
-async def leave_channel(sid, data):
-    logger.info("leave_channel is running")
+# @sio_server.event
+# async def leave_channel(sid, data):
+#     logger.info("leave_channel is running")
 
-    """
-    Allow a user to leave a channel and notify other members.
-    """
-    try:
-        # Retrieve session data
-        session = await sio_server.get_session(sid)
-    except KeyError:
-        print(f"Session not found for SID {sid}")
-        return
+#     """
+#     Allow a user to leave a channel and notify other members.
+#     """
+#     try:
+#         # Retrieve session data
+#         session = await sio_server.get_session(sid)
+#     except KeyError:
+#         print(f"Session not found for SID {sid}")
+#         return
 
-    # Extract channel name and user data from the session
-    channel_name = session.get('channel_name')
-    user_data = session.get('user_data')
-    if not channel_name:
-        channel_name = data.get('channel_name')
-    if channel_name:
-        # Notify other users in the room and leave the room
-        sio_server.leave_room(sid, channel_name)
-        await sio_server.emit('user_left', {'user_data': user_data}, room=channel_name)
-        print(f'User {user_data} left channel {channel_name}')
-        print(f"\n\n LEFT SUCCESSFULLY ------- {user_data} \n\n")
-    else:
-        print(f"No channel found for SID {sid}")
+#     # Extract channel name and user data from the session
+#     channel_name = session.get('channel_name')
+#     user_data = session.get('user_data')
+#     if not channel_name:
+#         channel_name = data.get('channel_name')
+#     if channel_name:
+#         # Notify other users in the room and leave the room
+#         sio_server.leave_room(sid, channel_name)
+#         await sio_server.emit('user_left', {'user_data': user_data}, room=channel_name)
+#         print(f'User {user_data} left channel {channel_name}')
+#         print(f"\n\n LEFT SUCCESSFULLY ------- {user_data} \n\n")
+#     else:
+#         print(f"No channel found for SID {sid}")
 
 
 
